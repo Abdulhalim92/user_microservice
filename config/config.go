@@ -9,6 +9,7 @@ import (
 type Config struct {
 	BrokerCfg BrokerCfg `yaml:"broker"`
 	DbCfg     DbCfg     `yaml:"db"`
+	RedisCfg  RedisCfg  `yaml:"redis"`
 }
 
 type BrokerCfg struct {
