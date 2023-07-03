@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
 	"net"
+	"os"
 	"user/config"
 	"user/internal/db"
 	"user/internal/handler"
@@ -31,6 +34,9 @@ func main() {
 	if err != nil {
 		log.Println(err)
 	}
+	defer pgxConn.Close(context.Background())
+
+	migrate(pgxConn)
 
 	newRepository := repository.NewRepository(pgxConn, log)
 
@@ -39,4 +45,25 @@ func main() {
 	newHandler := handler.NewHandler(nc, log, newService)
 	newHandler.Init()
 
+}
+
+func migrate(pgxConn *pgx.Conn) {
+
+	var exists bool
+
+	migrateBytes, err := os.ReadFile("./pkg/schemas/inits.sql")
+	if err != nil {
+		logging.GetLogger().Fatal(err)
+	}
+
+	err = pgxConn.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", "users").Scan(&exists)
+	if err != nil {
+		logging.GetLogger().Fatal(err)
+	}
+	if !exists {
+		_, err := pgxConn.Exec(context.Background(), string(migrateBytes))
+		if err != nil {
+			logging.GetLogger().Fatal(err)
+		}
+	}
 }

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"time"
 	"user/internal/logging"
 	"user/internal/model"
 )
@@ -36,14 +37,29 @@ func (r *UserRepository) CreateUser(u *model.User) (int, error) {
 
 func (r *UserRepository) GetUser(u *model.User) (*model.User, error) {
 
-	var user *model.User
+	var (
+		id       int
+		name     string
+		password string
+		created  time.Time
+		updated  time.Time
+	)
 
-	sqlQuery := "SELECT * FROM users WHERE name = $1 and password = $2"
+	//sqlQuery := "SELECT * FROM users WHERE name = $1 and password = $2"
+	sqlQuery := "SELECT * FROM users WHERE name = $1"
 
-	err := r.DbConn.QueryRow(context.Background(), sqlQuery, u.Name, u.Password).Scan(&user)
+	err := r.DbConn.QueryRow(context.Background(), sqlQuery, u.Name).Scan(&id, &name, &password, &created, &updated)
 	if err != nil {
 		r.Logger.Error(err)
 		return nil, err
+	}
+
+	user := &model.User{
+		ID:       id,
+		Name:     name,
+		Password: password,
+		Created:  created,
+		Updated:  updated,
 	}
 
 	return user, nil
@@ -51,19 +67,15 @@ func (r *UserRepository) GetUser(u *model.User) (*model.User, error) {
 
 func (r *UserRepository) ExistsUser(userName string) (bool, error) {
 
-	var id int
+	var exists bool
 
-	sqlQuery := "SELECT id FROM users WHERE name = $1"
+	sqlQuery := "SELECT EXISTS (SELECT 1 FROM users WHERE name = $1)"
 
-	err := r.DbConn.QueryRow(context.Background(), sqlQuery, userName).Scan(&id)
+	err := r.DbConn.QueryRow(context.Background(), sqlQuery, userName).Scan(&exists)
 	if err != nil {
 		r.Logger.Error(err)
 		return true, err
 	}
-	if id > 0 {
-		r.Logger.Println("such user exists")
-		return true, nil
-	}
 
-	return false, nil
+	return exists, nil
 }

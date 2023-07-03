@@ -27,7 +27,7 @@ func NewTokenService(rep *repository.Repository, log *logging.Logger, redis *red
 
 func (s *TokenService) CreateToken(userID int) (*model.TokenDetails, error) {
 
-	var td *model.TokenDetails
+	var td model.TokenDetails
 
 	td.AtExpires = time.Now().Add(15 * time.Minute).Unix()
 	td.AccessUuid = uuid.NewV4().String()
@@ -67,7 +67,7 @@ func (s *TokenService) CreateToken(userID int) (*model.TokenDetails, error) {
 		return nil, err
 	}
 
-	return td, nil
+	return &td, nil
 
 }
 

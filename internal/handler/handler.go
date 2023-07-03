@@ -60,6 +60,8 @@ func (h *Handler) SignUp(msg *nats.Msg) {
 
 	var u *model.User
 
+	fmt.Println(string(msg.Data))
+
 	err := json.Unmarshal(msg.Data, &u)
 	if err != nil {
 		h.Logger.Errorf("cannot unmarshal message: %s", err.Error())
@@ -94,6 +96,8 @@ func (h *Handler) SignUp(msg *nats.Msg) {
 func (h *Handler) SignIn(msg *nats.Msg) {
 
 	var u *model.User
+
+	fmt.Println(string(msg.Data))
 
 	err := json.Unmarshal(msg.Data, &u)
 	if err != nil {
