@@ -21,7 +21,7 @@ type TokenDetails struct {
 
 type AccessDetails struct {
 	AccessUuid string `json:"access_uuid"`
-	UserId     string `json:"user_id"`
+	UserId     int    `json:"user_id"`
 }
 
 type Token struct {

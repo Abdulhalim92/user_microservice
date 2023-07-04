@@ -41,9 +41,19 @@ func (h *Handler) Init() {
 		return
 	}
 
-	h.Nats.Subscribe("user.refresh", h.Refresh)
+	sub, err = h.Nats.Subscribe("user.refresh", h.Refresh)
+	if err != nil {
+		h.Logger.Error(err)
+		return
+	}
 
 	sub, err = h.Nats.Subscribe("user.sign-out", h.SignOut)
+	if err != nil {
+		h.Logger.Error(err)
+		return
+	}
+
+	sub, err = h.Nats.Subscribe("user.token-valid", h.TokenValid)
 	if err != nil {
 		h.Logger.Error(err)
 		return
@@ -236,4 +246,109 @@ func (h *Handler) Refresh(msg *nats.Msg) {
 
 func (h *Handler) SignOut(msg *nats.Msg) {
 
+	// extract token
+	bearToken := string(msg.Data)
+
+	err := os.Setenv("ACCESS_SECRET", "secret")
+	if err != nil {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte("internal server error"))
+		return
+	}
+
+	// verify token
+	jwtToken, err := jwt.Parse(bearToken, func(token *jwt.Token) (interface{}, error) {
+		// Make sure that the token method confirm to "SigningMethodHMAC"
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			h.Logger.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(os.Getenv("ACCESS_SECRET")), nil
+	})
+	if err != nil {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte(err.Error()))
+		return
+	}
+
+	// extract token metadata
+
+	var accessDetails *model.AccessDetails
+
+	claims, ok := jwtToken.Claims.(jwt.MapClaims)
+	if ok && jwtToken.Valid {
+		accessUuid, ok := claims["access_uuid"].(string)
+		if !ok {
+			h.Logger.Error(err)
+			h.Nats.Publish(msg.Reply, []byte("internal server error"))
+			return
+		}
+
+		userID, ok := claims["user_id"].(int)
+		if !ok {
+			h.Logger.Error(err)
+			h.Nats.Publish(msg.Reply, []byte("internal server error"))
+			return
+		}
+
+		accessDetails.AccessUuid = accessUuid
+		accessDetails.UserId = userID
+	}
+
+	deleted, err := h.Service.DeleteAuth(accessDetails.AccessUuid)
+	if err != nil {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte("internal server error"))
+		return
+	}
+	if err != nil || deleted == 0 {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte("internal server error"))
+		return
+	}
+
+	h.Nats.Publish(msg.Reply, []byte("Successfully logged out"))
+}
+
+func (h *Handler) TokenValid(msg *nats.Msg) {
+
+	// extract token
+	bearToken := string(msg.Data)
+
+	err := os.Setenv("ACCESS_SECRET", "secret")
+	if err != nil {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte("internal server error"))
+		return
+	}
+
+	// verify token
+	jwtToken, err := jwt.Parse(bearToken, func(token *jwt.Token) (interface{}, error) {
+		// Make sure that the token method confirm to "SigningMethodHMAC"
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			h.Logger.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(os.Getenv("ACCESS_SECRET")), nil
+	})
+	if err != nil {
+		h.Logger.Error(err)
+		h.Nats.Publish(msg.Reply, []byte(err.Error()))
+		return
+	}
+
+	// validation token
+	claims, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok && !!jwtToken.Valid {
+		h.Logger.Println("token is not valid")
+		h.Nats.Publish(msg.Reply, []byte("token is not valid"))
+		return
+	}
+
+	userId := claims["user_id"].(int)
+	userID := strconv.Itoa(userId)
+
+	h.Nats.Publish(msg.Reply, []byte(userID))
 }
